@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2196F3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Room Measure AR</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiUm9vbSBNZWFzdXJlIEFSIiwic2hvcnRfbmFtZSI6IlJvb21BUiIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjMjE5NkYzIiwiaWNvbnMiOlt7InNyYyI6ImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBR0FBQUFCZ0NBWUFBQUMzYlVyc0FBQUFFV2xEUTFCd1VrZENBUUFBQUFEQnJVZ0FCQUFEa1NJQU1DY05BZzJBV0FBQ0E0QUFBQUFIQUFBQSIsInNpemVzIjoiMTkyeDE5MiIsInR5cGUiOiJpbWFnZS9wbmcifV19">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+        }
+
+        #camera-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #canvas-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
+            padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+        }
+
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 70%, transparent 100%);
+            padding: 20px;
+            padding-top: max(20px, env(safe-area-inset-top));
+        }
+
+        .measurement-display {
+            background: rgba(33, 150, 243, 0.9);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .measurement-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .sensor-info {
+            background: rgba(0,0,0,0.7);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            color: white;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #2196F3;
+            box-shadow: 0 0 10px rgba(33, 150, 243, 0.8);
+        }
+
+        .crosshair::before {
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            transform: translateX(-50%);
+        }
+
+        .crosshair::after {
+            top: 50%;
+            left: 0;
+            height: 2px;
+            width: 100%;
+            transform: translateY(-50%);
+        }
+
+        .crosshair-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #2196F3;
+            box-shadow: 0 0 15px rgba(33, 150, 243, 0.8);
+        }
+
+        #measurements-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .measurement-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .measurement-item button {
+            padding: 5px 10px;
+            font-size: 12px;
+            flex: none;
+            width: auto;
+        }
+
+        #mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid transparent;
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .mode-btn.active {
+            background: rgba(33, 150, 243, 0.3);
+            border-color: #2196F3;
+        }
+
+        .instructions {
+            background: rgba(255, 152, 0, 0.9);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .point-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(76, 175, 80, 0.8);
+            border: 3px solid #fff;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+
+        .distance-line {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, #4CAF50 0%, #2196F3 100%);
+            transform-origin: left center;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(33, 150, 243, 0.6);
+        }
+
+        #permission-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            z-index: 1000;
+        }
+
+        #permission-screen h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #permission-screen p {
+            font-size: 16px;
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .permission-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="permission-screen">
+        <div class="permission-icon">📐</div>
+        <h1>Room Measure AR</h1>
+        <p>This app uses your camera and device sensors to measure distances and room dimensions.</p>
+        <button class="btn-primary" onclick="startApp()">Start Measuring</button>
+    </div>
+
+    <div id="camera-container" class="hidden">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas-overlay"></canvas>
+        
+        <div class="crosshair">
+            <div class="crosshair-center"></div>
+        </div>
+
+        <div id="hud">
+            <div class="measurement-display">
+                <div class="measurement-label">Current Distance</div>
+                <div id="distance-display">0.00 m</div>
+            </div>
+            <div class="sensor-info" id="sensor-info">
+                Tilt: 0° | Height: 1.6m | Mode: Point-to-Point
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="instructions" id="instructions">
+                Point at floor, press START, move to next point
+            </div>
+
+            <div id="mode-selector">
+                <button class="mode-btn active" onclick="setMode('point')">Point-to-Point</button>
+                <button class="mode-btn" onclick="setMode('wall')">Wall Height</button>
+                <button class="mode-btn" onclick="setMode('room')">Room Scan</button>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-success" id="measure-btn" onclick="measurePoint()">📍 Set Point</button>
+                <button class="btn-primary" id="calculate-btn" onclick="calculateDistance()" disabled>📏 Calculate</button>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-secondary" onclick="undoPoint()">↶ Undo</button>
+                <button class="btn-secondary" onclick="clearAll()">🗑️ Clear</button>
+                <button class="btn-secondary" onclick="saveRoom()">💾 Save</button>
+            </div>
+
+            <div id="measurements-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let video, canvas, ctx;
+        let deviceHeight = 1.6; // Default height in meters
+        let points = [];
+        let measurements = [];
+        let currentMode = 'point';
+        let orientation = { alpha: 0, beta: 0, gamma: 0 };
+        let hasMotionPermission = false;
+
+        const instructions = {
+            point: 'Point at floor, press SET POINT, move to next point',
+            wall: 'Point at floor, then ceiling to measure wall height',
+            room: 'Walk around room perimeter, marking corners'
+        };
+
+        async function startApp() {
+            try {
+                // Request camera permission
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+
+                video = document.getElementById('video');
+                video.srcObject = stream;
+
+                canvas = document.getElementById('canvas-overlay');
+                ctx = canvas.getContext('2d');
+
+                // Wait for video to be ready
+                await new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        resizeCanvas();
+                        resolve();
+                    };
+                });
+
+                // Request device orientation permission (iOS 13+)
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const permission = await DeviceOrientationEvent.requestPermission();
+                        if (permission === 'granted') {
+                            setupSensors();
+                            hasMotionPermission = true;
+                        }
+                    } catch (error) {
+                        console.error('Motion permission error:', error);
+                    }
+                } else {
+                    setupSensors();
+                    hasMotionPermission = true;
+                }
+
+                // Prompt for device height
+                const height = prompt('Enter your phone height from ground (in meters):', '1.6');
+                if (height) {
+                    deviceHeight = parseFloat(height);
+                }
+
+                document.getElementById('permission-screen').classList.add('hidden');
+                document.getElementById('camera-container').classList.remove('hidden');
+
+            } catch (error) {
+                alert('Error accessing camera: ' + error.message);
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function setupSensors() {
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', (event) => {
+                    orientation.alpha = event.alpha || 0;
+                    orientation.beta = event.beta || 0;
+                    orientation.gamma = event.gamma || 0;
+                    updateSensorInfo();
+                });
+            }
+        }
+
+        function updateSensorInfo() {
+            const tilt = Math.abs(orientation.beta - 90);
+            document.getElementById('sensor-info').textContent = 
+                `Tilt: ${tilt.toFixed(1)}° | Height: ${deviceHeight.toFixed(2)}m | Mode: ${currentMode}`;
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('instructions').textContent = instructions[mode];
+            clearAll();
+        }
+
+        function calculateDistance3D(tiltDegrees) {
+            // Convert tilt to radians
+            const tiltRad = (tiltDegrees * Math.PI) / 180;
+            
+            // Calculate horizontal distance using trigonometry
+            // distance = height / tan(tilt angle from horizontal)
+            const angleFromHorizontal = 90 - tiltDegrees;
+            const angleRad = (angleFromHorizontal * Math.PI) / 180;
+            
+            if (angleRad <= 0 || angleRad >= Math.PI / 2) {
+                return 0;
+            }
+            
+            const distance = deviceHeight / Math.tan(angleRad);
+            return Math.max(0, distance);
+        }
+
+        function measurePoint() {
+            const tilt = Math.abs(orientation.beta - 90);
+            const distance = calculateDistance3D(tilt);
+
+            const point = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                distance: distance,
+                tilt: tilt,
+                timestamp: Date.now()
+            };
+
+            points.push(point);
+            drawPoint(point);
+
+            if (points.length >= 2) {
+                document.getElementById('calculate-btn').disabled = false;
+            }
+
+            // Update distance display
+            document.getElementById('distance-display').textContent = distance.toFixed(2) + ' m';
+
+            // Vibrate if available
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+        }
+
+        function drawPoint(point) {
+            const marker = document.createElement('div');
+            marker.className = 'point-marker';
+            marker.style.left = point.x + 'px';
+            marker.style.top = point.y + 'px';
+            document.getElementById('camera-container').appendChild(marker);
+        }
+
+        function calculateDistance() {
+            if (points.length < 2) return;
+
+            const p1 = points[points.length - 2];
+            const p2 = points[points.length - 1];
+
+            // Calculate Euclidean distance using measured distances and screen positions
+            const screenDist = Math.sqrt(
+                Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
+            );
+
+            // Estimate real-world distance using triangulation
+            const realDistance = Math.sqrt(
+                Math.pow(p2.distance - p1.distance, 2) + 
+                Math.pow(Math.abs(p2.distance * Math.sin((p2.tilt - p1.tilt) * Math.PI / 180)), 2)
+            );
+
+            const measurement = {
+                distance: realDistance,
+                from: `Point ${points.length - 1}`,
+                to: `Point ${points.length}`,
+                timestamp: new Date().toLocaleString()
+            };
+
+            measurements.push(measurement);
+            displayMeasurement(measurement);
+            drawLine(p1, p2);
+
+            document.getElementById('distance-display').textContent = realDistance.toFixed(2) + ' m';
+
+            if ('vibrate' in navigator) {
+                navigator.vibrate([50, 50, 50]);
+            }
+        }
+
+        function drawLine(p1, p2) {
+            const line = document.createElement('div');
+            line.className = 'distance-line';
+            
+            const length = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+            const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+            
+            line.style.width = length + 'px';
+            line.style.left = p1.x + 'px';
+            line.style.top = p1.y + 'px';
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            document.getElementById('camera-container').appendChild(line);
+        }
+
+        function displayMeasurement(measurement) {
+            const list = document.getElementById('measurements-list');
+            const item = document.createElement('div');
+            item.className = 'measurement-item';
+            item.innerHTML = `
+                <div>
+                    <strong>${measurement.distance.toFixed(2)} m</strong><br>
+                    <small>${measurement.from} → ${measurement.to}</small>
+                </div>
+                <button class="btn-danger" onclick="deleteMeasurement(${measurements.length - 1})">✕</button>
+            `;
+            list.appendChild(item);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function deleteMeasurement(index) {
+            measurements.splice(index, 1);
+            updateMeasurementsList();
+        }
+
+        function updateMeasurementsList() {
+            const list = document.getElementById('measurements-list');
+            list.innerHTML = '';
+            measurements.forEach((m, i) => {
+                const item = document.createElement('div');
+                item.className = 'measurement-item';
+                item.innerHTML = `
+                    <div>
+                        <strong>${m.distance.toFixed(2)} m</strong><br>
+                        <small>${m.from} → ${m.to}</small>
+                    </div>
+                    <button class="btn-danger" onclick="deleteMeasurement(${i})">✕</button>
+                
